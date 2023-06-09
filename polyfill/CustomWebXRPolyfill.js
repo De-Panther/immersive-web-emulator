@@ -82,6 +82,7 @@ export default class CustomWebXRPolyfill extends WebXRPolyfill {
 		//       so there might be a chance that we remove this feature at some point.
 
 		let activeImmersiveSession = null;
+		const requestedFeatures = new Set();
 		const originalRequestSession = XRSystem.prototype.requestSession;
 		XRSystem.prototype.requestSession = function (mode, enabledFeatures = {}) {
 			return originalRequestSession
@@ -89,13 +90,24 @@ export default class CustomWebXRPolyfill extends WebXRPolyfill {
 				.then((session) => {
 					if (mode === 'immersive-vr' || mode === 'immersive-ar') {
 						activeImmersiveSession = session;
+						const requiredFeatures =
+							enabledFeatures.requiredFeatures ?
+							enabledFeatures.requiredFeatures : [];
+						const optionalFeatures =
+							enabledFeatures.optionalFeatures ?
+							enabledFeatures.optionalFeatures : [];
+						requestedFeatures.clear();
+						for (let feature of requiredFeatures) {
+							requestedFeatures.add(feature);
+						}
+						for (let feature of optionalFeatures) {
+							requestedFeatures.add(feature);
+						}
 
 						// DOM-Overlay API
-						const optionalFeatures = enabledFeatures.optionalFeatures;
 						const domOverlay = enabledFeatures.domOverlay;
 						if (
-							optionalFeatures &&
-							optionalFeatures.includes('dom-overlay') &&
+							requestedFeatures.has('dom-overlay') &&
 							domOverlay &&
 							domOverlay.root
 						) {
@@ -366,6 +378,11 @@ export default class CustomWebXRPolyfill extends WebXRPolyfill {
 		// Extending XRSession and XRFrame for AR hitting test API.
 
 		XRSession.prototype.requestHitTestSource = function (options) {
+			if (requestedFeatures.has('hit-test')) {
+				return Promise.reject(
+					new DOMException('The operation is not supported.',
+					'NotSupportedError'));
+			}
 			const source = new XRHitTestSource(this, options);
 			const device = this[XRSESSION_PRIVATE].device;
 			device.addHitTestSource(source);
@@ -375,6 +392,11 @@ export default class CustomWebXRPolyfill extends WebXRPolyfill {
 		XRSession.prototype.requestHitTestSourceForTransientInput = function (
 			options,
 		) {
+			if (requestedFeatures.has('hit-test')) {
+				return Promise.reject(
+					new DOMException('The operation is not supported.',
+					'NotSupportedError'));
+			}
 			const source = new XRTransientInputHitTestSource(this, options);
 			const device = this[XRSESSION_PRIVATE].device;
 			device.addHitTestSourceForTransientInput(source);
